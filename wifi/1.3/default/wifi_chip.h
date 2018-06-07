@@ -245,6 +245,7 @@ class WifiChip : public V1_3::IWifiChip {
     std::string allocateApOrStaIfaceName(uint32_t start_idx);
     std::string allocateApIfaceName();
     std::string allocateStaIfaceName();
+    std::string qcAllocateApIfaceName();
     bool writeRingbufferFilesInternal();
 
     ChipId chip_id_;
