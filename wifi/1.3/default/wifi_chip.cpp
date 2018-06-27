@@ -809,13 +809,8 @@ std::pair<WifiStatus, sp<IWifiApIface>> WifiChip::createApIfaceInternal() {
         return {createWifiStatus(WifiStatusCode::ERROR_NOT_AVAILABLE), {}};
     }
 
-    std::string ifname = "";
     bool iface_created = false;
-    if (feature_flags_.lock()->isDualInterfaceSupported())
-        ifname = qcAllocateApIfaceName();
-    else
-        ifname = allocateApIfaceName();
-
+    std::string ifname = allocateApIfaceName();
     if (!if_nametoindex(ifname.c_str())) {
         legacy_hal::wifi_error legacy_status =
             legacy_hal_.lock()->QcAddInterface(getWlan0IfaceName(), ifname,
@@ -988,7 +983,7 @@ std::pair<WifiStatus, sp<IWifiStaIface>> WifiChip::createStaIfaceInternal() {
     std::string ifname = allocateStaIfaceName();
     if (!if_nametoindex(ifname.c_str())) {
         legacy_hal::wifi_error legacy_status =
-            legacy_hal_.lock()->QcAddInterface(getWlanIfaceName(0), ifname,
+            legacy_hal_.lock()->QcAddInterface(getWlan0IfaceName(), ifname,
                                                (uint32_t)IfaceType::STA);
         if (legacy_status != legacy_hal::WIFI_SUCCESS) {
             LOG(ERROR) << "Failed to add interface: " << ifname << " "
@@ -1033,7 +1028,7 @@ WifiStatus WifiChip::removeStaIfaceInternal(const std::string& ifname) {
     }
     if (findUsingName(created_sta_ifaces_, ifname) != nullptr) {
         legacy_hal::wifi_error legacy_status =
-            legacy_hal_.lock()->QcRemoveInterface(getWlanIfaceName(0), ifname);
+            legacy_hal_.lock()->QcRemoveInterface(getWlan0IfaceName(), ifname);
         if (legacy_status != legacy_hal::WIFI_SUCCESS) {
             LOG(ERROR) << "Failed to remove interface: " << ifname << " "
                        << legacyErrorToString(legacy_status);
@@ -1561,23 +1556,6 @@ std::string WifiChip::allocateApIfaceName() {
 // Primary STA iface will always be 0.
 std::string WifiChip::allocateStaIfaceName() {
     return allocateApOrStaIfaceName(0);
-}
-
-// Return "wlan1", if "wlan1" is not already in use, else return "wlan0".
-// This is based on the assumption that we'll have a max of 2 concurrent
-// AP ifaces.
-std::string WifiChip::qcAllocateApIfaceName() {
-    auto ap_iface = findUsingName(ap_ifaces_, getWlan1IfaceName());
-    if (!ap_iface.get()) {
-        return getWlan1IfaceName();
-    }
-    ap_iface = findUsingName(ap_ifaces_, getWlan0IfaceName());
-    if (!ap_iface.get()) {
-        return getWlan0IfaceName();
-    }
-    // This should never happen. We screwed up somewhere if it did.
-    CHECK(0) << "wlan0 and wlan1 in use already!";
-    return {};
 }
 
 bool WifiChip::writeRingbufferFilesInternal() {
