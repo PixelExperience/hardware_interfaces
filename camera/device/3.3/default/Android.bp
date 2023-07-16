@@ -9,7 +9,10 @@ package {
 
 cc_library_shared {
     name: "camera.device@3.3-impl",
-    defaults: ["hidl_defaults"],
+    defaults: [
+        "hidl_defaults",
+        "camera_needs_64_bit_usage_flags_defaults",
+    ],
     proprietary: true,
     srcs: [
         "CameraDevice.cpp",
