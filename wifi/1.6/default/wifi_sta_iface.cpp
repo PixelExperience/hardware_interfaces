@@ -20,6 +20,7 @@
 #include "hidl_struct_util.h"
 #include "wifi_sta_iface.h"
 #include "wifi_status_util.h"
+#include "linux/if.h"
 
 namespace android {
 namespace hardware {
@@ -579,10 +580,52 @@ std::pair<WifiStatus, std::array<uint8_t, 6>> WifiStaIface::getFactoryMacAddress
     return {createWifiStatus(WifiStatusCode::SUCCESS), mac};
 }
 
+#define PRIV_CMD_SIZE 512
+
+typedef struct android_wifi_priv_cmd {
+    char buf[PRIV_CMD_SIZE];
+    int used_len;
+    int total_len;
+} android_wifi_priv_cmd;
+
 WifiStatus WifiStaIface::setScanModeInternal(bool enable) {
-    // OEM's need to implement this on their devices if needed.
-    LOG(WARNING) << "setScanModeInternal(" << enable << ") not supported";
-    return createWifiStatus(WifiStatusCode::ERROR_NOT_SUPPORTED);
+    LOG(DEBUG) << "setScanModeInternal(" << enable << ")";
+
+    int ioctl_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (ioctl_sock < 0) {
+        LOG(ERROR) << "setScanModeInternal failed to create socket: ret="
+                << ioctl_sock << ", errno=" << strerror(errno);
+        return createWifiStatus(WifiStatusCode::ERROR_UNKNOWN);
+    }
+
+    struct ifreq ifr;
+    android_wifi_priv_cmd priv_cmd;
+
+    memset(&ifr, 0, sizeof(struct ifreq));
+    memset(&priv_cmd, 0, sizeof(priv_cmd));
+
+    strncpy(ifr.ifr_name, ifname_.c_str(), IFNAMSIZ - 1);
+
+    int ret = snprintf(priv_cmd.buf, sizeof(priv_cmd.buf), "set_fw_param alwaysscanen %d", (enable ? 1 : 0));
+    if (ret < 0 || ret >= PRIV_CMD_SIZE) {
+        LOG(ERROR) << "snprintf failed";
+        close(ioctl_sock);
+        return createWifiStatus(WifiStatusCode::ERROR_UNKNOWN);
+    }
+    priv_cmd.used_len = strlen(priv_cmd.buf) + 1;
+    priv_cmd.total_len = PRIV_CMD_SIZE;
+
+    ifr.ifr_data = &priv_cmd;
+
+    ret = ioctl(ioctl_sock, SIOCDEVPRIVATE + 1, &ifr);
+    close(ioctl_sock);
+    if (ret < 0) {
+        LOG(ERROR) << "ioctl: cmd=" << priv_cmd.buf << ", ret=" << ret << ", error=", strerror(errno);
+        return createWifiStatus(WifiStatusCode::ERROR_UNKNOWN);
+    }
+    LOG(DEBUG) << "setScanMode to " << enable << " successfully";
+
+    return createWifiStatus(WifiStatusCode::SUCCESS);
 }
 
 }  // namespace implementation
